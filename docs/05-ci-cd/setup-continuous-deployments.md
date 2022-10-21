@@ -305,4 +305,37 @@ To verify the whole setup works, please use the same procedure as you already le
 
 As an exercise, go ahead and make a change to one or even more microservices. Then, open a PR and check the associated workflow. Next, approve the PR and merge change into main branch. Check the main branch GitHub workflow as it progresses. When finished, check if Argo propagated the latest changes to your development DOKS cluster.
 
-Next, you will learn how to create GitHub releases for your application and propagate (or promote) changes to upper environments. First to staging, and then after QA approval (may imply project manager decision as well) deploy to production environment as well.
+## Reverting Application Changes when Things Go Bad
+
+Up to this point you tested only the happy CI/CD flows for the main application. In reality things may go wrong, hence it's important to know how to deal with this kind of situations as well. Because you're already using GitOps it should be easy to revert changes in case something goes bad. The only place where you need to perform changes is the GitHub repository hosting your application.
+
+Moving forward, everything is controlled via pull requests because you already set main branch protection rules. So, the process doesn't get out of control because no one pushes inadvertently to the main branch - this is very important to avoid configuration drifts, and bad things to happen.
+
+Still, even with all processes you already have in place, there's is a chance for human errors to slip. Thus, it is very important to know how to handle and recover from this situation. There are two options available:
+
+1. Use the GitHub [PR revert feature](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/reverting-a-pull-request). It is a feature present in the GitHub user interface which creates a new PR that contains one revert of the merge commit from the original merged pull request. After merging the PR into main branch, Argo CD will pickup changes and deploy the previous images for the application. This approach has a few pros and cons:
+    - It is easier to revert back to the original state via single button in the GitHub user interface. It feels natural, just as you would do using the `Undo` feature from your IDE, or any other desktop application. This aspect falls into the pros category.
+    - It will trigger the whole set of CI workflows again. First, the PR workflow, and then the main branch workflow which rebuilds the same set of images basically but using a different commit ID. In the end, you will achieve the final goal and revert things back to their initial state, but the outcome is unnecessary images being built and additional waiting time (things may break in between also). This aspect falls more into the cons category.
+    - You have more control over the process, meaning you also revert the whole batch of changes for application code which may be a desired thing or not. This aspect falls more or less into the pros category.
+2. Another option is to create a fresh PR, and revert only the `kustomize` changes to switch to the previous deployment that worked. This approach is more `lightweight` and doesn't trigger a bunch of GitHub workflows as in the first approach. On the other hand, defective application code stays in place. But, the main advantage is that you revert your application to a working state very quickly, thus it creates minimum application downtime.
+
+If choosing the second option, you have time to prepare a set of fixes (or hot-fixes) meanwhile. When everything is ready and you feel confident about your work, go as usual with the CI flow. Open a new PR with your code changes, obtain approval, merge into main branch, Argo CD picks up and updates the application in the development cluster.
+
+The first approach is already set up, so if you need to go that route there's nothing new to learn or implement. Following example is based on the second approach.
+
+Steps to revert a bad deployment for the development environment (applies to upper environments as well):
+
+1. Identify the problematic commit ID in your application GitHub repository. You should be able to spot it quickly because it contains the following signature:
+
+    ![GitHub Actions Commit Signature](github-actions-signature.png)
+
+2. Navigate to the respective commit ID, and see what changed:
+
+    ![Identify Container Images Tags](identify-img-tag-id.png)
+
+3. Create a new PR containing changes with the previous image tag for each affected microservice (the red value from the diff image above).
+4. Wait for the Kustomize manifests validation workflow to finish, and if everything is alright approve and merge the PR.
+
+After a few moments (3 minutes max), you should see the old version of the application present in your development environment.
+
+So far, you learned how to configure and enable an automated CI/CD flow for the development environment. Next, you will learn how to create GitHub releases for your application and propagate (or promote) changes to upper environments. First to the staging environment, and then after QA approval (may imply project manager decision as well), deploy to production environments as well.
